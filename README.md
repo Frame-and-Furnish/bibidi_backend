@@ -1,4 +1,4 @@
-# Bibidi Backend 🏗️
+# Bibidi Backend! 🏗️
 
 A modern, scalable backend API built with Node.js, Express, TypeScript, Drizzle ORM, and PostgreSQL for **Bibidi** - a social network platform designed specifically for service workers in the home improvement, maintenance, and construction sectors.
 
