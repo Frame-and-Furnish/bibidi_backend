@@ -9,6 +9,7 @@ import {
   integer,
   primaryKey,
   unique,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -16,6 +17,7 @@ import { relations } from 'drizzle-orm';
 export const roles = pgTable('roles', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 50 }).notNull().unique(),
+  description: text('description'),
 });
 
 // Categories table - Service categories
@@ -54,6 +56,24 @@ export const userRoles = pgTable(
   })
 );
 
+// Recruiters table - Offline team members
+export const recruiters = pgTable('recruiters', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' })
+    .unique(),
+  phone: varchar('phone', { length: 30 }).notNull(),
+  city: varchar('city', { length: 100 }),
+  status: varchar('status', { length: 20 }).default('active').notNull(),
+  latitude: decimal('latitude', { precision: 10, scale: 8 }),
+  longitude: decimal('longitude', { precision: 11, scale: 8 }),
+  avatarUrl: text('avatar_url'),
+  lastActiveAt: timestamp('last_active_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Provider profiles table - Extended information for users with provider role
 export const providerProfiles = pgTable('provider_profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -78,9 +98,71 @@ export const providerProfiles = pgTable('provider_profiles', {
   latitude: decimal('latitude', { precision: 10, scale: 8 }),
   longitude: decimal('longitude', { precision: 11, scale: 8 }),
   locationString: varchar('location_string', { length: 255 }),
+  contactPhone: varchar('contact_phone', { length: 30 }),
+  fullAddress: text('full_address'),
   isAvailable: integer('is_available').default(1), // 1 = available, 0 = unavailable
+  status: varchar('status', { length: 20 }).default('pending').notNull(),
+  onboardedBy: uuid('onboarded_by').references(() => recruiters.id, { onDelete: 'set null' }),
+  onboardedAt: timestamp('onboarded_at'),
+  commissionRate: decimal('commission_rate', { precision: 5, scale: 4 }).default('0.0200'),
+  totalEarnings: decimal('total_earnings', { precision: 12, scale: 2 }).default('0'),
+  totalCommission: decimal('total_commission', { precision: 12, scale: 2 }).default('0'),
+  archivedAt: timestamp('archived_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Recruiter invitations - handles invite tokens for onboarding recruiters
+export const recruiterInvitations = pgTable('recruiter_invitations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  token: uuid('token').notNull().unique(),
+  status: varchar('status', { length: 20 }).default('pending').notNull(),
+  invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at'),
+  acceptedAt: timestamp('accepted_at'),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Recruiter events - audit log of recruiter activity (status changes, location updates, onboardings, etc.)
+export const recruiterEvents = pgTable('recruiter_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  recruiterId: uuid('recruiter_id')
+    .notNull()
+    .references(() => recruiters.id, { onDelete: 'cascade' }),
+  eventType: varchar('event_type', { length: 50 }).notNull(),
+  metadata: jsonb('metadata').default('{}'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Provider documents - supporting documents for verification (IDs, certifications, etc.)
+export const providerDocuments = pgTable('provider_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  providerId: uuid('provider_id')
+    .notNull()
+    .references(() => providerProfiles.id, { onDelete: 'cascade' }),
+  documentType: varchar('document_type', { length: 50 }).notNull(),
+  storageKey: text('storage_key'),
+  fileUrl: text('file_url').notNull(),
+  fileName: text('file_name'),
+  mimeType: varchar('mime_type', { length: 120 }),
+  fileSize: integer('file_size'),
+  uploadedBy: uuid('uploaded_by').references(() => recruiters.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Provider commissions - commission ledger per provider
+export const providerCommissions = pgTable('provider_commissions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  providerId: uuid('provider_id')
+    .notNull()
+    .references(() => providerProfiles.id, { onDelete: 'cascade' }),
+  recruiterId: uuid('recruiter_id').references(() => recruiters.id, { onDelete: 'set null' }),
+  amount: decimal('amount', { precision: 12, scale: 2 }).notNull(),
+  commissionRate: decimal('commission_rate', { precision: 5, scale: 4 }).default('0.0200'),
+  notes: text('notes'),
+  recordedAt: timestamp('recorded_at').defaultNow().notNull(),
 });
 
 // Services table - Available services with pricing
@@ -134,6 +216,7 @@ export const timeSlots = pgTable('time_slots', {
 export const usersRelations = relations(users, ({ many }) => ({
   userRoles: many(userRoles),
   providerProfile: many(providerProfiles),
+  recruiters: many(recruiters),
   customerBookings: many(bookings, { relationName: 'customerBookings' }),
   providerBookings: many(bookings, { relationName: 'providerBookings' }),
   timeSlots: many(timeSlots),
@@ -167,6 +250,60 @@ export const providerProfilesRelations = relations(providerProfiles, ({ one }) =
   category: one(categories, {
     fields: [providerProfiles.categoryId],
     references: [categories.id],
+  }),
+  onboardedByRecruiter: one(recruiters, {
+    fields: [providerProfiles.onboardedBy],
+    references: [recruiters.id],
+    relationName: 'onboarded_by_recruiter',
+  }),
+}));
+
+export const recruitersRelations = relations(recruiters, ({ one, many }) => ({
+  user: one(users, {
+    fields: [recruiters.userId],
+    references: [users.id],
+  }),
+  events: many(recruiterEvents),
+  documentsUploaded: many(providerDocuments),
+  providerCommissions: many(providerCommissions),
+  onboardedProviders: many(providerProfiles, {
+    relationName: 'onboarded_by_recruiter',
+  }),
+}));
+
+export const recruiterInvitationsRelations = relations(recruiterInvitations, ({ one }) => ({
+  invitedByUser: one(users, {
+    fields: [recruiterInvitations.invitedBy],
+    references: [users.id],
+  }),
+}));
+
+export const recruiterEventsRelations = relations(recruiterEvents, ({ one }) => ({
+  recruiter: one(recruiters, {
+    fields: [recruiterEvents.recruiterId],
+    references: [recruiters.id],
+  }),
+}));
+
+export const providerDocumentsRelations = relations(providerDocuments, ({ one }) => ({
+  provider: one(providerProfiles, {
+    fields: [providerDocuments.providerId],
+    references: [providerProfiles.id],
+  }),
+  uploadedByRecruiter: one(recruiters, {
+    fields: [providerDocuments.uploadedBy],
+    references: [recruiters.id],
+  }),
+}));
+
+export const providerCommissionsRelations = relations(providerCommissions, ({ one }) => ({
+  provider: one(providerProfiles, {
+    fields: [providerCommissions.providerId],
+    references: [providerProfiles.id],
+  }),
+  recruiter: one(recruiters, {
+    fields: [providerCommissions.recruiterId],
+    references: [recruiters.id],
   }),
 }));
 
@@ -235,6 +372,7 @@ export type UserWithRoles = User & {
 export type ProviderProfileWithUser = ProviderProfile & {
   user: User;
   category?: Category;
+  onboardedByRecruiter?: Recruiter;
 };
 
 export type BookingWithDetails = Booking & {
@@ -242,3 +380,18 @@ export type BookingWithDetails = Booking & {
   provider: User;
   service: Service;
 };
+
+export type Recruiter = typeof recruiters.$inferSelect;
+export type NewRecruiter = typeof recruiters.$inferInsert;
+
+export type RecruiterInvitation = typeof recruiterInvitations.$inferSelect;
+export type NewRecruiterInvitation = typeof recruiterInvitations.$inferInsert;
+
+export type RecruiterEvent = typeof recruiterEvents.$inferSelect;
+export type NewRecruiterEvent = typeof recruiterEvents.$inferInsert;
+
+export type ProviderDocument = typeof providerDocuments.$inferSelect;
+export type NewProviderDocument = typeof providerDocuments.$inferInsert;
+
+export type ProviderCommission = typeof providerCommissions.$inferSelect;
+export type NewProviderCommission = typeof providerCommissions.$inferInsert;
