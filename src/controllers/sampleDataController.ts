@@ -1,9 +1,29 @@
 import { Request, Response } from 'express';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/connectDB';
-import { categories, services, providerProfiles, users, userRoles, roles, NewCategory, NewService, NewProviderProfile, NewUser, NewUserRole } from '../db/schema';
-import { formatError, formatSuccess } from '../utils/helpers';
-import { hashPassword } from '../utils/helpers';
+import { 
+  categories, 
+  services, 
+  providerProfiles, 
+  users, 
+  userRoles, 
+  roles, 
+  recruiters,
+  recruiterEvents,
+  NewCategory, 
+  NewService, 
+  NewUser, 
+  NewUserRole,
+  NewRecruiter 
+} from '../db/schema';
+import { formatError, formatSuccess, hashPassword } from '../utils/helpers';
+import {
+  ensureRoleId,
+  ensureUserHasRole,
+  ensureCategoryByName,
+  createProviderProfileRecord,
+} from '../services/providerProfilesService';
+import { insertProviderDocuments } from '../services/providerDocumentsService';
 
 /**
  * Initialize sample data for development
@@ -56,7 +76,56 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
       .onConflictDoNothing()
       .returning();
 
-    // Create sample provider users and profiles
+    // Create sample admin and recruiter users
+    const adminUser = await db
+      .insert(users)
+      .values({
+        email: 'admin@bibidi.com',
+        password: await hashPassword('admin123'),
+        firstName: 'Admin',
+        lastName: 'User'
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (adminUser.length > 0 && adminUser[0]) {
+      const adminRoleId = await ensureRoleId('administrator', 'System administrator role');
+      await ensureUserHasRole(adminUser[0].id, adminRoleId);
+    }
+
+    const recruiterUser = await db
+      .insert(users)
+      .values({
+        email: 'recruiter@bibidi.com',
+        password: await hashPassword('recruiter123'),
+        firstName: 'Jane',
+        lastName: 'Recruiter'
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    let sampleRecruiterId: string | null = null;
+    if (recruiterUser.length > 0 && recruiterUser[0]) {
+      const recruiterRoleId = await ensureRoleId('recruiter', 'Offline team recruiter role');
+      await ensureUserHasRole(recruiterUser[0].id, recruiterRoleId);
+
+      const recruiterProfile = await db
+        .insert(recruiters)
+        .values({
+          userId: recruiterUser[0].id,
+          phone: '+1-604-555-0100',
+          city: 'Kelowna, BC',
+          status: 'active',
+          latitude: '49.8880',
+          longitude: '-119.4960'
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      sampleRecruiterId = recruiterProfile[0]?.id || null;
+    }
+
+    // Create sample provider users and profiles using shared services
     const sampleProviders = [
       {
         user: {
@@ -69,17 +138,36 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
           businessName: 'Elite Construction',
           description: 'Professional construction and renovation services',
           serviceTitle: 'Builder',
-          categoryId: 1,
-          pricePerHour: '85',
+          serviceCategory: 'Builder',
+          pricePerHour: 85,
           rating: '4.8',
           reviewCount: 25,
-          latitude: '49.8880',
-          longitude: '-119.4960',
+          latitude: 49.8880,
+          longitude: -119.4960,
           locationString: 'Downtown Kelowna',
           profilePictureURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
           portfolioImageURLs: ['https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&h=200&fit=crop'],
-          isAvailable: 1
-        }
+          isAvailable: 1,
+          onboardedBy: sampleRecruiterId
+        },
+        documents: [
+          {
+            documentType: 'contractor_license',
+            fileUrl: 'https://example.com/docs/mike-license.pdf',
+            storageKey: 'providers/mike-johnson/contractor-license.pdf',
+            fileName: 'ContractorLicense.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 245600
+          },
+          {
+            documentType: 'insurance_certificate',
+            fileUrl: 'https://example.com/docs/mike-insurance.pdf',
+            storageKey: 'providers/mike-johnson/insurance.pdf',
+            fileName: 'Insurance.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 189400
+          }
+        ]
       },
       {
         user: {
@@ -92,17 +180,28 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
           businessName: 'Color Masters',
           description: 'Interior and exterior painting specialists',
           serviceTitle: 'Painting',
-          categoryId: 2,
-          pricePerHour: '75',
+          serviceCategory: 'Painting',
+          pricePerHour: 75,
           rating: '4.9',
           reviewCount: 32,
-          latitude: '49.8940',
-          longitude: '-119.4900',
+          latitude: 49.8940,
+          longitude: -119.4900,
           locationString: 'Midtown Kelowna',
           profilePictureURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
           portfolioImageURLs: ['https://images.unsplash.com/photo-1613844044163-1ad2f2d0b152?q=80&w=1740&auto=format&fit=crop'],
-          isAvailable: 1
-        }
+          isAvailable: 1,
+          onboardedBy: sampleRecruiterId
+        },
+        documents: [
+          {
+            documentType: 'business_license',
+            fileUrl: 'https://example.com/docs/sarah-business.pdf',
+            storageKey: 'providers/sarah-williams/business-license.pdf',
+            fileName: 'BusinessLicense.pdf',
+            mimeType: 'application/pdf',
+            fileSize: 167800
+          }
+        ]
       },
       {
         user: {
@@ -115,17 +214,19 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
           businessName: 'Green Thumb Landscaping',
           description: 'Landscape design and garden maintenance',
           serviceTitle: 'Gardener',
-          categoryId: 6,
-          pricePerHour: '65',
+          serviceCategory: 'Gardener',
+          pricePerHour: 65,
           rating: '4.7',
           reviewCount: 18,
-          latitude: '49.8820',
-          longitude: '-119.5020',
+          latitude: 49.8820,
+          longitude: -119.5020,
           locationString: 'Westside Kelowna',
           profilePictureURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
           portfolioImageURLs: ['https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=300&h=200&fit=crop'],
-          isAvailable: 0
-        }
+          isAvailable: 0,
+          onboardedBy: null // Self-serve provider
+        },
+        documents: [] // No documents for self-serve
       }
     ];
 
@@ -143,48 +244,71 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
       if (userResults.length > 0) {
         const user = userResults[0];
         
-        // Ensure user exists before proceeding
         if (!user) {
           console.error('Failed to create user');
           continue;
         }
 
-        // Assign provider role
-        const providerRole = await db.select().from(roles).where(eq(roles.name, 'provider'));
-        if (providerRole.length === 0) {
-          await db.insert(roles).values({ name: 'provider' }).onConflictDoNothing();
-        }
-        
-        const roleResults = await db.select().from(roles).where(eq(roles.name, 'provider'));
-        if (roleResults.length > 0 && roleResults[0]) {
-          const newUserRole: NewUserRole = {
-            userId: user.id,
-            roleId: roleResults[0].id
-          };
-          await db.insert(userRoles).values(newUserRole).onConflictDoNothing();
-        }
+        // Ensure provider role using shared service
+        const providerRoleId = await ensureRoleId('provider', 'Service provider role');
+        await ensureUserHasRole(user.id, providerRoleId);
 
-        // Create provider profile
-        if (user.firstName && user.lastName) {
-          const newProfile: NewProviderProfile = {
-            userId: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            ...providerData.profile
-          };
+        // Get category ID from service category name
+        const categoryId = await ensureCategoryByName(providerData.profile.serviceCategory);
 
-          const profileResults = await db
-            .insert(providerProfiles)
-            .values(newProfile)
-            .onConflictDoNothing()
-            .returning();
+        // Create provider profile using shared service
+        const profile = await createProviderProfileRecord({
+          userId: user.id,
+          firstName: user.firstName!,
+          lastName: user.lastName!,
+          businessName: providerData.profile.businessName,
+          description: providerData.profile.description,
+          profilePictureURL: providerData.profile.profilePictureURL,
+          serviceTitle: providerData.profile.serviceTitle,
+          categoryId,
+          pricePerHour: providerData.profile.pricePerHour,
+          locationString: providerData.profile.locationString,
+          latitude: providerData.profile.latitude,
+          longitude: providerData.profile.longitude,
+          portfolioImageURLs: providerData.profile.portfolioImageURLs,
+          status: 'active',
+          onboardedBy: providerData.profile.onboardedBy,
+          onboardedAt: providerData.profile.onboardedBy ? new Date() : null,
+        });
 
-          if (profileResults.length > 0) {
-            insertedProviders.push({
-              user,
-              profile: profileResults[0]
+        if (profile) {
+          // Add documents if any
+          if (providerData.documents.length > 0) {
+            await insertProviderDocuments(
+              providerData.documents.map(doc => ({
+                providerId: profile.id,
+                documentType: doc.documentType,
+                fileUrl: doc.fileUrl,
+                storageKey: doc.storageKey,
+                fileName: doc.fileName,
+                mimeType: doc.mimeType,
+                fileSize: doc.fileSize,
+                uploadedBy: providerData.profile.onboardedBy
+              }))
+            );
+          }
+
+          // Log recruiter event if onboarded by recruiter
+          if (providerData.profile.onboardedBy && sampleRecruiterId) {
+            await db.insert(recruiterEvents).values({
+              recruiterId: sampleRecruiterId,
+              eventType: 'provider_onboarded',
+              metadata: {
+                providerId: profile.id,
+                serviceCategory: providerData.profile.serviceCategory,
+              },
             });
           }
+
+          insertedProviders.push({
+            user,
+            profile
+          });
         }
       }
     }
@@ -193,7 +317,9 @@ export const initializeSampleData = async (req: Request, res: Response): Promise
       categories: insertedCategories.length,
       services: insertedServices.length,
       providers: insertedProviders.length,
-      message: 'Sample data initialized successfully'
+      recruiter: sampleRecruiterId ? 'Created sample recruiter' : 'No recruiter created',
+      admin: adminUser.length > 0 ? 'Created admin user' : 'No admin created',
+      message: 'Sample data initialized successfully with offline team features'
     }, 'Sample data initialization completed'));
 
   } catch (error) {

@@ -52,9 +52,18 @@ A modern, scalable backend API built with Node.js, Express, TypeScript, Drizzle 
    npm run dev
    ```
 
+5. **Initialize sample data (optional):**
+   ```bash
+   # In development mode (no auth required)
+   curl -X POST http://localhost:3000/api/admin/init-sample-data
+   
+   # Or use any HTTP client like Postman/Insomnia
+   # Creates sample users, providers, categories, and documents
+   ```
+
 Server runs on `http://localhost:3000`
 
-## �️ File Storage & Uploads
+## 📁 File Storage & Uploads
 
 The offline onboarding flows support secure document uploads for provider verification. Configure storage via environment variables:
 
@@ -74,7 +83,7 @@ The offline onboarding flows support secure document uploads for provider verifi
 - With `s3`, files are streamed directly to your configured bucket. Provide the corresponding AWS credentials and optional custom endpoint.
 - Document uploads are available at `POST /api/offline/providers/:id/documents/upload` and return the stored document metadata.
 
-## �📚 Documentation
+## 📚 Documentation
 
 - **[Installation & Setup](docs/installation.md)** - Detailed setup instructions for macOS/Linux
 - **[API Reference](docs/api.md)** - Complete API endpoints and database schema

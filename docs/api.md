@@ -85,6 +85,40 @@ Creating a profile automatically ensures the user has the **provider** role and 
 | POST | `/users/:id/roles` | Assign role to user | Admin |
 | DELETE | `/users/:id/roles/:roleName` | Remove role from user | Admin |
 | GET | `/stats` | Get system statistics | Admin |
+| POST | `/init-sample-data` | Initialize sample data for development/testing | Admin (Public in dev) |
+
+### Sample Data Initialization
+
+`POST /api/admin/init-sample-data`
+
+Initializes the database with sample data including:
+
+- **Service Categories**: Builder, Painting, Carpenter, Plumber, etc.
+- **Sample Services**: Basic service offerings with pricing
+- **Admin User**: `admin@bibidi.com` / `admin123` (administrator role)
+- **Recruiter User**: `recruiter@bibidi.com` / `recruiter123` (recruiter role) 
+- **Provider Profiles**: Mix of recruiter-onboarded and self-serve providers
+- **Sample Documents**: Licenses, insurance certificates for recruiter-onboarded providers
+- **Recruiter Events**: Audit trail of onboarding activities
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "categories": 10,
+    "services": 10,
+    "providers": 3,
+    "recruiter": "Created sample recruiter",
+    "admin": "Created admin user",
+    "message": "Sample data initialized successfully with offline team features"
+  }
+}
+```
+
+**Access Control:**
+- Development mode (`NODE_ENV=development`): Public access
+- Production mode: Requires administrator role
 
 ## Offline Provider Routes (`/api/offline/providers`)
 
