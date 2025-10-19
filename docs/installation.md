@@ -146,7 +146,49 @@ npm run db:migrate
 npm run db:studio
 ```
 
-## 5. Start Development Server
+## 5. Initialize Sample Data (Optional)
+
+For development and testing purposes, you can populate the database with realistic sample data:
+
+```bash
+# Make sure your development server is running first
+npm run dev
+
+# In a new terminal, initialize sample data
+curl -X POST http://localhost:3000/api/admin/init-sample-data \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ADMIN_JWT_TOKEN"
+
+# Alternative: Use the endpoint directly in your API client
+# POST http://localhost:3000/api/admin/init-sample-data
+```
+
+**What this creates:**
+- **Admin User**: Full system access with admin dashboard capabilities
+- **Recruiter User**: Team management and provider recruitment features
+- **Sample Providers**: Various service providers across different categories
+- **Service Categories**: Complete category structure with realistic examples
+- **Provider Documents**: Sample certifications, licenses, and business documents
+- **Realistic Data**: Professional profiles with contact information and specializations
+
+**Access Control:**
+- **Development**: No authentication required - endpoint is open for testing
+- **Production**: Requires admin authentication token
+
+**Sample Data Structure:**
+```json
+{
+  "message": "Sample data initialized successfully",
+  "data": {
+    "users": 2,
+    "categories": 15,
+    "providers": 8,
+    "documents": 24
+  }
+}
+```
+
+## 6. Start Development Server
 
 ```bash
 # Development mode with hot reload

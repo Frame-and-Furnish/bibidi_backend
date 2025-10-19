@@ -22,6 +22,30 @@
 | POST | `/` | Create provider profile | Provider/Admin |
 | PUT | `/:id` | Update provider profile | Owner/Admin |
 
+### Provider Profile Payload
+
+`POST /api/profiles`
+
+```json
+{
+  "firstName": "Jamie",
+  "lastName": "Rivera",
+  "businessName": "Jamie Rivera Plumbing",
+  "serviceTitle": "Emergency Plumbing",
+  "description": "Certified journeyman plumber focusing on emergency repairs.",
+  "categoryId": 12,
+  "pricePerHour": 95,
+  "profilePictureURL": "https://example.com/avatar.jpg",
+  "portfolioImageURLs": ["https://example.com/portfolio-1.jpg"],
+  "latitude": 49.2827,
+  "longitude": -123.1207,
+  "locationString": "Vancouver, BC",
+  "nextAvailability": "2025-10-15T09:00:00.000Z"
+}
+```
+
+Creating a profile automatically ensures the user has the **provider** role and normalizes numeric and date fields. Any unknown category can be created by recruiters via the offline flow; self-serve onboarding requires an existing `categoryId`.
+
 ## Categories Routes (`/api/categories`)
 
 | Method | Endpoint | Description | Access |
@@ -61,6 +85,90 @@
 | POST | `/users/:id/roles` | Assign role to user | Admin |
 | DELETE | `/users/:id/roles/:roleName` | Remove role from user | Admin |
 | GET | `/stats` | Get system statistics | Admin |
+| POST | `/init-sample-data` | Initialize sample data for development/testing | Admin (Public in dev) |
+
+### Sample Data Initialization
+
+`POST /api/admin/init-sample-data`
+
+Initializes the database with sample data including:
+
+- **Service Categories**: Builder, Painting, Carpenter, Plumber, etc.
+- **Sample Services**: Basic service offerings with pricing
+- **Admin User**: `admin@bibidi.com` / `admin123` (administrator role)
+- **Recruiter User**: `recruiter@bibidi.com` / `recruiter123` (recruiter role) 
+- **Provider Profiles**: Mix of recruiter-onboarded and self-serve providers
+- **Sample Documents**: Licenses, insurance certificates for recruiter-onboarded providers
+- **Recruiter Events**: Audit trail of onboarding activities
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "categories": 10,
+    "services": 10,
+    "providers": 3,
+    "recruiter": "Created sample recruiter",
+    "admin": "Created admin user",
+    "message": "Sample data initialized successfully with offline team features"
+  }
+}
+```
+
+**Access Control:**
+- Development mode (`NODE_ENV=development`): Public access
+- Production mode: Requires administrator role
+
+## Offline Provider Routes (`/api/offline/providers`)
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/` | Onboard a new provider profile | Recruiter/Admin |
+| GET | `/` | List providers with filters | Recruiter/Admin |
+| GET | `/:id` | Get provider details and documents | Recruiter/Admin |
+| PATCH | `/:id` | Update provider profile metadata | Recruiter/Admin |
+| PATCH | `/:id/status` | Change provider review status | Admin |
+| POST | `/:id/documents/upload` | Upload a document file and store metadata | Recruiter/Admin |
+| POST | `/:id/documents` | Attach existing document metadata | Recruiter/Admin |
+| DELETE | `/:providerId/documents/:documentId` | Remove a provider document | Recruiter/Admin |
+
+### Offline Onboarding Payload
+
+`POST /api/offline/providers`
+
+```json
+{
+  "fullName": "Alex Morgan",
+  "email": "alex@example.com",
+  "phone": "+1-604-555-0199",
+  "serviceCategory": "Residential Painting",
+  "city": "Kelowna, BC",
+  "pricePerHour": 60,
+  "fullAddress": "101 Main Street, Kelowna, BC",
+  "bio": "Specializing in interior residential painting with 8 years of experience.",
+  "profilePictureUrl": "https://example.com/headshot.jpg",
+  "latitude": 49.888,
+  "longitude": -119.496,
+  "documents": [
+    {
+      "documentType": "insurance_certificate",
+      "fileUrl": "https://storage.example.com/docs/123.pdf",
+      "storageKey": "providers/alex-morgan/123.pdf",
+      "fileName": "InsuranceCertificate.pdf",
+      "mimeType": "application/pdf",
+      "fileSize": 280345
+    }
+  ]
+}
+```
+
+Recruiter onboarding uses the same underlying profile/document services as the self-serve flow and automatically:
+
+- Ensures the recruited user has the **provider** role (creating it if necessary).
+- Creates or reuses a service category based on `serviceCategory`.
+- Normalizes price and geo fields for storage.
+- Persists documents through the shared provider document service, enabling later listing and deletion.
 
 ## Database Schema
 

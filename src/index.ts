@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 // Load environment variables FIRST before any other imports that might use them
 dotenv.config();
@@ -15,6 +17,9 @@ import adminRouter from './routers/adminRouter';
 import categoriesRouter from './routers/categoriesRouter';
 import servicesRouter from './routers/servicesRouter';
 import bookingsRouter from './routers/bookingsRouter';
+import recruitersRouter from './routers/recruitersRouter';
+import offlineProvidersRouter from './routers/offlineProvidersRouter';
+import offlineDashboardRouter from './routers/offlineDashboardRouter';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +51,15 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve local uploads when using local storage driver
+if ((process.env.STORAGE_DRIVER || 'local') !== 's3') {
+  const uploadsDir = process.env.LOCAL_UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
+}
+
 // Request logging middleware (simple console logging)
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -69,6 +83,9 @@ app.use('/api/admin', adminRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/bookings', bookingsRouter);
+app.use('/api/recruiters', recruitersRouter);
+app.use('/api/offline/providers', offlineProvidersRouter);
+app.use('/api/offline/dashboard', offlineDashboardRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

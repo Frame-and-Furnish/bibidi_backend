@@ -2,8 +2,15 @@ import { Request, Response } from 'express';
 import Joi from 'joi';
 import { eq, desc, ilike, and, or, sql } from 'drizzle-orm';
 import { db } from '../db/connectDB';
-import { providerProfiles, users, userRoles, roles, categories } from '../db/schema';
-import { formatError, formatSuccess } from '../utils/helpers';
+import { providerProfiles, users, categories } from '../db/schema';
+import { formatError, formatSuccess, sanitizeString } from '../utils/helpers';
+import {
+  ensureRoleId,
+  ensureUserHasRole,
+  createProviderProfileRecord,
+  updateProviderProfileRecord,
+} from '../services/providerProfilesService';
+import type { ProviderProfileUpdateInput } from '../services/providerProfilesService';
 
 // Validation schema for provider profile creation
 const createProviderProfileSchema = Joi.object({
@@ -317,35 +324,32 @@ export const createProviderProfile = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Create the profile
-    const newProfile = {
+    const providerRoleId = await ensureRoleId('provider', 'Service provider role');
+    await ensureUserHasRole(userId, providerRoleId);
+
+    const profile = await createProviderProfileRecord({
       userId,
-      ...value,
-    };
+      firstName: sanitizeString(value.firstName),
+      lastName: sanitizeString(value.lastName),
+      businessName: sanitizeString(value.businessName),
+  description: value.description !== undefined ? sanitizeString(value.description) : null,
+      profilePictureURL: value.profilePictureURL ?? null,
+      serviceTitle: sanitizeString(value.serviceTitle),
+      categoryId: value.categoryId ?? null,
+      pricePerHour: value.pricePerHour ?? null,
+  locationString: value.locationString !== undefined ? sanitizeString(value.locationString) : null,
+      latitude: value.latitude ?? null,
+      longitude: value.longitude ?? null,
+      portfolioImageURLs: value.portfolioImageURLs ?? null,
+      nextAvailability: value.nextAvailability ?? null,
+    });
 
-    const insertedProfiles = await db.insert(providerProfiles).values(newProfile).returning();
-    const insertedProfile = insertedProfiles[0];
-
-    // Add provider role to user if not already present
-    const providerRole = await db.select().from(roles).where(eq(roles.name, 'provider'));
-    if (providerRole.length > 0 && providerRole[0]) {
-      const existingUserRole = await db
-        .select()
-        .from(userRoles)
-        .where(and(
-          eq(userRoles.userId, userId),
-          eq(userRoles.roleId, providerRole[0].id)
-        ));
-
-      if (existingUserRole.length === 0) {
-        await db.insert(userRoles).values({
-          userId,
-          roleId: providerRole[0].id,
-        });
-      }
+    if (!profile) {
+      res.status(500).json(formatError('Failed to create provider profile', 'PROFILE_CREATION_FAILED'));
+      return;
     }
 
-    res.status(201).json(formatSuccess(insertedProfile, 'Provider profile created successfully'));
+    res.status(201).json(formatSuccess(profile, 'Provider profile created successfully'));
 
   } catch (error) {
     console.error('Create provider profile error:', error);
@@ -370,7 +374,7 @@ export const updateProviderProfile = async (req: Request, res: Response): Promis
       return;
     }
 
-    const { userId, roles: userRoles } = req.user;
+  const { userId, roles: userRoleNames } = req.user;
 
     // Validate input
     const { error, value } = updateProviderProfileSchema.validate(req.body);
@@ -393,22 +397,71 @@ export const updateProviderProfile = async (req: Request, res: Response): Promis
     }
 
     // Check if user owns the profile or is an admin
-    if (profile.userId !== userId && !userRoles.includes('administrator')) {
+  if (profile.userId !== userId && !userRoleNames.includes('administrator')) {
       res.status(403).json(formatError('Access denied. You can only update your own profile', 'INSUFFICIENT_PERMISSIONS'));
       return;
     }
 
-    // Update the profile
-    const updatedProfiles = await db
-      .update(providerProfiles)
-      .set({
-        ...value,
-        updatedAt: new Date(),
-      })
-      .where(eq(providerProfiles.id, id))
-      .returning();
+    const updatePayload: ProviderProfileUpdateInput = {};
 
-    const updatedProfile = updatedProfiles[0];
+    if (value.firstName !== undefined) {
+      updatePayload.firstName = sanitizeString(value.firstName);
+    }
+
+    if (value.lastName !== undefined) {
+      updatePayload.lastName = sanitizeString(value.lastName);
+    }
+
+    if (value.businessName !== undefined) {
+      updatePayload.businessName = sanitizeString(value.businessName);
+    }
+
+    if (value.description !== undefined) {
+      updatePayload.description = sanitizeString(value.description);
+    }
+
+    if (value.serviceTitle !== undefined) {
+      updatePayload.serviceTitle = sanitizeString(value.serviceTitle);
+    }
+
+    if (value.categoryId !== undefined) {
+      updatePayload.categoryId = value.categoryId ?? null;
+    }
+
+    if (value.pricePerHour !== undefined) {
+      updatePayload.pricePerHour = value.pricePerHour ?? null;
+    }
+
+    if (value.profilePictureURL !== undefined) {
+      updatePayload.profilePictureURL = value.profilePictureURL ?? null;
+    }
+
+    if (value.portfolioImageURLs !== undefined) {
+      updatePayload.portfolioImageURLs = value.portfolioImageURLs ?? null;
+    }
+
+    if (value.latitude !== undefined) {
+      updatePayload.latitude = value.latitude;
+    }
+
+    if (value.longitude !== undefined) {
+      updatePayload.longitude = value.longitude;
+    }
+
+    if (value.locationString !== undefined) {
+      updatePayload.locationString = sanitizeString(value.locationString);
+    }
+
+    if (value.nextAvailability !== undefined) {
+      updatePayload.nextAvailability = value.nextAvailability ?? null;
+    }
+
+    const updatedProfile = await updateProviderProfileRecord(id, updatePayload);
+
+    if (!updatedProfile) {
+      res.status(500).json(formatError('Failed to update provider profile', 'PROFILE_UPDATE_FAILED'));
+      return;
+    }
 
     res.status(200).json(formatSuccess(updatedProfile, 'Provider profile updated successfully'));
 

@@ -23,6 +23,11 @@
 **Optional:**
 - `FRONTEND_URL` (production frontend URL for CORS)
 - `BCRYPT_ROUNDS=12` (password hashing rounds)
+- `STORAGE_DRIVER` (`local` or `s3`; defaults to `local`)
+- `LOCAL_UPLOADS_DIR` (absolute path for local uploads when using `local` driver)
+- `STORAGE_PUBLIC_URL` (public base URL to serve uploaded files)
+- `UPLOAD_MAX_FILE_MB` (maximum upload size in megabytes; defaults to `15`)
+- `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT` (required when using the `s3` driver)
 
 ## Platform-Specific Deployment
 

@@ -43,7 +43,7 @@ const loginSchema = Joi.object({
 /**
  * Generate JWT token with user information and roles
  */
-const generateToken = (userId: string, userRoles: string[]): string => {
+export const generateToken = (userId: string, userRoles: string[]): string => {
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
