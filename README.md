@@ -87,7 +87,8 @@ The offline onboarding flows support secure document uploads for provider verifi
 
 - **[Installation & Setup](docs/installation.md)** - Detailed setup instructions for macOS/Linux
 - **[API Reference](docs/api.md)** - Complete API endpoints and database schema
-- **[Deployment](docs/deployment.md)** - Production deployment guide
+- **[Deployment Guide](docs/deployment.md)** - Production deployment to AWS EC2
+- **[Quick Start Deployment](DEPLOYMENT_QUICKSTART.md)** - Fast track AWS deployment guide
 
 ## 🔧 Available Scripts
 
