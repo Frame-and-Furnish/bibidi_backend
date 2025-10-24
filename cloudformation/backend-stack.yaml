@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CI/CD Infrastructure for Bibidi Backend - Complete Stack with VPC, ALB, ASG, CodeDeploy, and OIDC'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CI/CD Infrastructure for Bibidi Backend - Complete Stack with VPC, ALB, ASG, CodeDeploy, and OIDC"
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -23,8 +23,6 @@ Metadata:
           - DesiredCapacity
       - Label:
           default: "Database Configuration"
-        Parameters:
-          - DatabaseSecretArn
     ParameterLabels:
       GitHubOrg:
         default: "GitHub Organization"
@@ -42,25 +40,23 @@ Metadata:
         default: "Maximum Number of Instances"
       DesiredCapacity:
         default: "Desired Number of Instances"
-      DatabaseSecretArn:
-        default: "Database Secret ARN (Optional)"
 
 Parameters:
   GitHubOrg:
     Type: String
     Default: Frame-and-Furnish
     Description: GitHub organization name
-  
+
   GitHubRepo:
     Type: String
     Default: bibidi_backend
     Description: GitHub repository name
-  
+
   GitHubThumbprint:
     Type: String
     Default: 6938fd4d98bab03faadb97b34396831e3780aea1
     Description: GitHub OIDC thumbprint (current as of 2022)
-  
+
   EnvironmentName:
     Type: String
     Default: production
@@ -69,7 +65,7 @@ Parameters:
       - staging
       - production
     Description: Environment name
-  
+
   InstanceType:
     Type: String
     Default: t3.small
@@ -78,50 +74,71 @@ Parameters:
       - t3.small
       - t3.medium
     Description: EC2 instance type
-  
+
   MinSize:
     Type: Number
     Default: 2
     MinValue: 1
     MaxValue: 10
     Description: Minimum number of EC2 instances
-  
+
   MaxSize:
     Type: Number
     Default: 4
     MinValue: 1
     MaxValue: 10
     Description: Maximum number of EC2 instances
-  
+
   DesiredCapacity:
     Type: Number
     Default: 2
     MinValue: 1
     MaxValue: 10
     Description: Desired number of EC2 instances
-  
-  DatabaseSecretArn:
-    Type: String
-    Default: ''
-    Description: ARN of the database secret in Secrets Manager (optional - leave empty for initial setup)
-
-Conditions:
-  HasDatabaseSecret: !Not [!Equals [!Ref DatabaseSecretArn, '']]
 
 Mappings:
   RegionMap:
-    ca-central-1:
-      AMI: ami-0c9bfc21ac5bf10eb  # Amazon Linux 2 (Canada Central)
+    # Source for AMIs: https://aws.amazon.com/linux/amazon-linux-2023/faqs/
+    # Source for ALB IDs: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
     us-east-1:
-      AMI: ami-0c55b159cbfafe1f0  # Amazon Linux 2
+      ALBAccountID: '127311923021'
+      AMI: 'ami-0c55b159cbfafe1f0'
+    us-east-2:
+      ALBAccountID: '033677994240'
+      AMI: 'ami-0f7919c33c90f7688'
+    us-west-1:
+      ALBAccountID: '027434742980'
+      AMI: 'ami-00f4613c7800b5203'
     us-west-2:
-      AMI: ami-0d1cd67c26f5fca19
+      ALBAccountID: '797873946194'
+      AMI: 'ami-08e2d37b6a0129927'
+    ca-central-1:
+      ALBAccountID: '985666609251'
+      AMI: 'ami-0538f1c7895763577'
+    eu-central-1:
+      ALBAccountID: '054676820928'
+      AMI: 'ami-050b31a7039a3c547'
+    eu-west-1:
+      ALBAccountID: '156460612806'
+      AMI: 'ami-0d75513e757a3472c'
+    eu-west-2:
+      ALBAccountID: '652711504416'
+      AMI: 'ami-01931335233628b93'
+    ap-southeast-1:
+      ALBAccountID: '114774131450'
+      AMI: 'ami-0c1a7f5c3f3c9a06c'
+    ap-southeast-2:
+      ALBAccountID: '783225319266'
+      AMI: 'ami-05aa3b4e98a3311b8'
+    ap-northeast-1:
+      ALBAccountID: '582318560864'
+      AMI: 'ami-0cfa3caed41872339'
 
 Resources:
   # ============================================
   # VPC and Networking
   # ============================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -130,7 +147,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-vpc'
+          Value: !Sub "${EnvironmentName}-bibidi-vpc"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -139,7 +156,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-igw'
+          Value: !Sub "${EnvironmentName}-bibidi-igw"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -152,22 +169,22 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-public-subnet-1'
+          Value: !Sub "${EnvironmentName}-bibidi-public-subnet-1"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-public-subnet-2'
+          Value: !Sub "${EnvironmentName}-bibidi-public-subnet-2"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -175,7 +192,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-public-rt'
+          Value: !Sub "${EnvironmentName}-bibidi-public-rt"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -204,7 +221,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-bibidi-alb-sg'
+      GroupName: !Sub "${EnvironmentName}-bibidi-alb-sg"
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -224,12 +241,12 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-alb-sg'
+          Value: !Sub "${EnvironmentName}-bibidi-alb-sg"
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-bibidi-ec2-sg'
+      GroupName: !Sub "${EnvironmentName}-bibidi-ec2-sg"
       GroupDescription: Security group for EC2 instances - only allows traffic from ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -244,12 +261,12 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-ec2-sg'
+          Value: !Sub "${EnvironmentName}-bibidi-ec2-sg"
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-bibidi-rds-sg'
+      GroupName: !Sub "${EnvironmentName}-bibidi-rds-sg"
       GroupDescription: Security group for RDS PostgreSQL - only allows traffic from EC2
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -264,7 +281,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-rds-sg'
+          Value: !Sub "${EnvironmentName}-bibidi-rds-sg"
 
   # ============================================
   # RDS PostgreSQL Database
@@ -276,35 +293,35 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.10.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-private-subnet-1'
+          Value: !Sub "${EnvironmentName}-bibidi-private-subnet-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-private-subnet-2'
+          Value: !Sub "${EnvironmentName}-bibidi-private-subnet-2"
 
   # DB Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${EnvironmentName}-bibidi-db-subnet-group'
+      DBSubnetGroupName: !Sub "${EnvironmentName}-bibidi-db-subnet-group"
       DBSubnetGroupDescription: Subnet group for RDS PostgreSQL
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-db-subnet-group'
+          Value: !Sub "${EnvironmentName}-bibidi-db-subnet-group"
 
   # RDS Parameter Group (PostgreSQL configuration)
   DBParameterGroup:
@@ -318,61 +335,62 @@ Resources:
         shared_preload_libraries: pg_stat_statements
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-db-params'
+          Value: !Sub "${EnvironmentName}-bibidi-db-params"
 
   # RDS PostgreSQL Instance
   PostgreSQLDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-bibidi-postgres'
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-bibidi-postgres"
       Engine: postgres
-      EngineVersion: '15.4'
-      DBInstanceClass: db.t3.micro
+      EngineVersion: "15.7"
+      DBInstanceClass: db.t3.medium
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       StorageType: gp3
       StorageEncrypted: true
-      
+
       # Database credentials (stored in Secrets Manager)
       MasterUsername: bibidi_admin
       ManageMasterUserPassword: true
       MasterUserSecret:
         KmsKeyId: alias/aws/secretsmanager
-      
+
       # Networking
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       PubliclyAccessible: false
-      
+
       # High Availability (Multi-AZ for production)
       MultiAZ: true
-      
+
       # Backups
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       CopyTagsToSnapshot: true
       DeleteAutomatedBackups: false
-      
+
       # Performance Insights
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 7
-      
+
       # Monitoring
       EnableCloudwatchLogsExports:
         - postgresql
         - upgrade
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
-      
+
       # Parameter Group
       DBParameterGroupName: !Ref DBParameterGroup
-      
+
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-postgres'
+          Value: !Sub "${EnvironmentName}-bibidi-postgres"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -380,8 +398,9 @@ Resources:
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${EnvironmentName}-RDSMonitoringRole"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -391,7 +410,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-RDSMonitoringRole'
+          Value: !Sub "${EnvironmentName}-RDSMonitoringRole"
 
   # ============================================
   # S3 Bucket for Artifacts
@@ -399,7 +418,7 @@ Resources:
   ArtifactBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'bibidi-backend-artifacts-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "bibidi-backend-artifacts-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -419,7 +438,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-artifacts'
+          Value: !Sub "${EnvironmentName}-bibidi-artifacts"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -429,7 +448,7 @@ Resources:
   ALBLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'bibidi-backend-alb-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "bibidi-backend-alb-logs-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -449,7 +468,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-alb-logs'
+          Value: !Sub "${EnvironmentName}-bibidi-alb-logs"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -458,20 +477,15 @@ Resources:
     Properties:
       Bucket: !Ref ALBLogsBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Sid: AWSLogDeliveryWrite
-            Effect: Allow
+          - Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              AWS: !Sub
+                - "arn:${AWS::Partition}:iam::${ALBAccountID}:root"
+                - ALBAccountID: !FindInMap [RegionMap, !Ref AWS::Region, ALBAccountID]
             Action: s3:PutObject
-            Resource: !Sub '${ALBLogsBucket.Arn}/*'
-          - Sid: AWSLogDeliveryAclCheck
-            Effect: Allow
-            Principal:
-              Service: elasticloadbalancing.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ALBLogsBucket.Arn
+            Resource: !Sub "${ALBLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
 
   # ============================================
   # IAM - OIDC Provider for GitHub Actions
@@ -496,11 +510,11 @@ Resources:
   GitHubActionsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-GitHubActionsRole-BibidiBackend'
+      RoleName: !Sub "${EnvironmentName}-GitHubActionsRole-BibidiBackend"
       Description: IAM role for GitHub Actions to deploy Bibidi Backend
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -510,13 +524,12 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodeDeployDeployerAccess
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
+      ManagedPolicyArns: []
       Policies:
         - PolicyName: S3ArtifactAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -527,10 +540,10 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
-                  - !Sub '${ArtifactBucket.Arn}/*'
+                  - !Sub "${ArtifactBucket.Arn}/*"
         - PolicyName: CodeDeployAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -539,10 +552,10 @@ Resources:
                   - codedeploy:GetApplicationRevision
                   - codedeploy:CreateDeployment
                   - codedeploy:GetDeployment
-                Resource: '*'
+                Resource: "*"
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-GitHubActionsRole'
+          Value: !Sub "${EnvironmentName}-GitHubActionsRole"
 
   # ============================================
   # IAM - EC2 Instance Role
@@ -551,10 +564,10 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-BibidiBackend-EC2Role'
+      RoleName: !Sub "${EnvironmentName}-BibidiBackend-EC2Role"
       Description: IAM role for EC2 instances running Bibidi Backend
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -566,7 +579,7 @@ Resources:
       Policies:
         - PolicyName: S3ArtifactDownload
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -574,30 +587,30 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   - !GetAtt ArtifactBucket.Arn
-                  - !Sub '${ArtifactBucket.Arn}/*'
+                  - !Sub "${ArtifactBucket.Arn}/*"
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
                   - secretsmanager:DescribeSecret
                 Resource:
-                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bibidi/*'
-                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rds!*'
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bibidi/*"
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rds!*"
         - PolicyName: CloudFormationReadAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - cloudformation:DescribeStacks
                   - cloudformation:ListStacks
-                Resource: '*'
+                Resource: "*"
         - PolicyName: CloudWatchLogs
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -605,15 +618,15 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bibidi/*'
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bibidi/*"
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-EC2Role'
+          Value: !Sub "${EnvironmentName}-EC2Role"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-BibidiBackend-EC2Profile'
+      InstanceProfileName: !Sub "${EnvironmentName}-BibidiBackend-EC2Profile"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -625,7 +638,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: ALBLogsBucketPolicy
     Properties:
-      Name: !Sub '${EnvironmentName}-bibidi-backend-alb'
+      Name: !Sub "${EnvironmentName}-bibidi-backend-alb"
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -636,23 +649,23 @@ Resources:
         - !Ref ALBSecurityGroup
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
-          Value: 'true'
+          Value: "true"
         - Key: access_logs.s3.bucket
           Value: !Ref ALBLogsBucket
         - Key: idle_timeout.timeout_seconds
-          Value: '60'
+          Value: "60"
         - Key: deletion_protection.enabled
-          Value: 'false'
+          Value: "false"
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-backend-alb'
+          Value: !Sub "${EnvironmentName}-bibidi-backend-alb"
         - Key: Environment
           Value: !Ref EnvironmentName
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${EnvironmentName}-bibidi-backend-tg'
+      Name: !Sub "${EnvironmentName}-bibidi-backend-tg"
       Port: 3000
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -668,10 +681,10 @@ Resources:
       TargetType: instance
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
-          Value: '30'
+          Value: "30"
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-backend-tg'
+          Value: !Sub "${EnvironmentName}-bibidi-backend-tg"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -692,9 +705,9 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${EnvironmentName}-bibidi-backend-lt'
+      LaunchTemplateName: !Sub "${EnvironmentName}-bibidi-backend-lt"
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -704,7 +717,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${EnvironmentName}-bibidi-backend-instance'
+                Value: !Sub "${EnvironmentName}-bibidi-backend-instance"
               - Key: Environment
                 Value: !Ref EnvironmentName
               - Key: Application
@@ -713,30 +726,30 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             set -e
-            
+
             # Log all output
             exec > >(tee /var/log/user-data.log)
             exec 2>&1
-            
+
             echo "Starting instance initialization..."
-            
+
             # Update system
             yum update -y
-            
+
             # Install Node.js 18
             echo "Installing Node.js 18..."
             curl -sL https://rpm.nodesource.com/setup_18.x | bash -
             yum install -y nodejs
-            
+
             # Verify Node.js installation
             node --version
             npm --version
-            
+
             # Install PM2 globally
             echo "Installing PM2..."
             npm install -g pm2
             pm2 startup systemd -u ec2-user --hp /home/ec2-user
-            
+
             # Install CodeDeploy Agent
             echo "Installing CodeDeploy Agent..."
             yum install -y ruby wget
@@ -745,21 +758,21 @@ Resources:
             chmod +x ./install
             ./install auto
             service codedeploy-agent start
-            
+
             # Create application directory
             echo "Creating application directory..."
             mkdir -p /var/www/bibidi-backend
             chown -R ec2-user:ec2-user /var/www/bibidi-backend
-            
+
             # Install CloudWatch Agent (optional but recommended)
             echo "Installing CloudWatch Agent..."
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
-            
+
             # Create log directory
             mkdir -p /var/log/bibidi-backend
             chown -R ec2-user:ec2-user /var/log/bibidi-backend
-            
+
             echo "Instance initialization complete!"
 
   # ============================================
@@ -768,10 +781,10 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: 
+    DependsOn:
       - PublicRoute
     Properties:
-      AutoScalingGroupName: !Sub '${EnvironmentName}-bibidi-backend-asg'
+      AutoScalingGroupName: !Sub "${EnvironmentName}-bibidi-backend-asg"
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -787,7 +800,7 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-bibidi-backend-instance'
+          Value: !Sub "${EnvironmentName}-bibidi-backend-instance"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -816,7 +829,7 @@ Resources:
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-bibidi-backend-cpu-high'
+      AlarmName: !Sub "${EnvironmentName}-bibidi-backend-cpu-high"
       AlarmDescription: Scale up when CPU exceeds 70%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -834,7 +847,7 @@ Resources:
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-bibidi-backend-cpu-low'
+      AlarmName: !Sub "${EnvironmentName}-bibidi-backend-cpu-low"
       AlarmDescription: Scale down when CPU is below 30%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -856,28 +869,28 @@ Resources:
   CodeDeployServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-CodeDeployServiceRole-BibidiBackend'
+      RoleName: !Sub "${EnvironmentName}-CodeDeployServiceRole-BibidiBackend"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: codedeploy.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodeDeployRole
+        - arn:aws:iam::aws:policy/AWSCodeDeployFullAccess
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-CodeDeployServiceRole'
+          Value: !Sub "${EnvironmentName}-CodeDeployServiceRole"
 
   CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
     Properties:
-      ApplicationName: !Sub '${EnvironmentName}-BibidiBackendApp'
+      ApplicationName: !Sub "${EnvironmentName}-BibidiBackendApp"
       ComputePlatform: Server
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-BibidiBackendApp'
+          Value: !Sub "${EnvironmentName}-BibidiBackendApp"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -885,7 +898,7 @@ Resources:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub '${EnvironmentName}-bibidi-backend-dg'
+      DeploymentGroupName: !Sub "${EnvironmentName}-bibidi-backend-dg"
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
       DeploymentConfigName: CodeDeployDefault.OneAtATime
       AutoScalingGroups:
@@ -900,7 +913,7 @@ Resources:
           - DEPLOYMENT_STOP_ON_ALARM
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-DeploymentGroup'
+          Value: !Sub "${EnvironmentName}-DeploymentGroup"
 
 # ============================================
 # Outputs
@@ -911,107 +924,107 @@ Outputs:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-VPC'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-VPC"
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-PublicSubnet1'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-PublicSubnet1"
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-PublicSubnet2'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-PublicSubnet2"
 
   S3BucketName:
     Description: S3 Bucket for deployment artifacts
     Value: !Ref ArtifactBucket
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-ArtifactBucket'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-ArtifactBucket"
 
   ALBLogsBucketName:
     Description: S3 Bucket for ALB access logs
     Value: !Ref ALBLogsBucket
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-ALBLogsBucket'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-ALBLogsBucket"
 
   GitHubActionsRoleArn:
     Description: IAM Role ARN for GitHub Actions (add this to GitHub Secrets as AWS_ROLE_ARN)
     Value: !GetAtt GitHubActionsRole.Arn
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-GitHubActionsRoleArn'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-GitHubActionsRoleArn"
 
   LoadBalancerURL:
     Description: URL of the Application Load Balancer
-    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-LoadBalancerURL'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-LoadBalancerURL"
 
   LoadBalancerDNS:
     Description: DNS name of the Application Load Balancer (for Route53)
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-LoadBalancerDNS'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-LoadBalancerDNS"
 
   LoadBalancerHostedZone:
     Description: Hosted Zone ID of the Application Load Balancer (for Route53)
     Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-LoadBalancerHostedZone'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-LoadBalancerHostedZone"
 
   CodeDeployApplication:
     Description: CodeDeploy Application Name (add this to GitHub Secrets as CODEDEPLOY_APP)
     Value: !Ref CodeDeployApplication
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-CodeDeployApp'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-CodeDeployApp"
 
   DeploymentGroup:
     Description: CodeDeploy Deployment Group Name (add this to GitHub Secrets as CODEDEPLOY_GROUP)
     Value: !Ref DeploymentGroup
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DeploymentGroup'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DeploymentGroup"
 
   EC2SecurityGroupId:
     Description: Security Group ID for EC2 instances
     Value: !Ref EC2SecurityGroup
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-EC2SecurityGroup'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-EC2SecurityGroup"
 
   ALBSecurityGroupId:
     Description: Security Group ID for Application Load Balancer
     Value: !Ref ALBSecurityGroup
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-ALBSecurityGroup'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-ALBSecurityGroup"
 
   # Database Outputs
   DatabaseEndpoint:
     Description: PostgreSQL database endpoint
     Value: !GetAtt PostgreSQLDatabase.Endpoint.Address
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DatabaseEndpoint'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DatabaseEndpoint"
 
   DatabasePort:
     Description: PostgreSQL database port
     Value: !GetAtt PostgreSQLDatabase.Endpoint.Port
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DatabasePort'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DatabasePort"
 
   DatabaseName:
     Description: PostgreSQL database name (default 'postgres')
     Value: postgres
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DatabaseName'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DatabaseName"
 
   DatabaseSecretArn:
     Description: ARN of the secret containing database master password
     Value: !GetAtt PostgreSQLDatabase.MasterUserSecret.SecretArn
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DatabaseSecretArn'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DatabaseSecretArn"
 
   DatabaseConnectionString:
     Description: Database connection string template (replace PASSWORD with actual password from Secrets Manager)
-    Value: !Sub 'postgresql://bibidi_admin:PASSWORD@${PostgreSQLDatabase.Endpoint.Address}:${PostgreSQLDatabase.Endpoint.Port}/postgres'
+    Value: !Sub "postgresql://bibidi_admin:PASSWORD@${PostgreSQLDatabase.Endpoint.Address}:${PostgreSQLDatabase.Endpoint.Port}/postgres"
     Export:
-      Name: !Sub '${EnvironmentName}-BibidiBackend-DatabaseConnectionString'
+      Name: !Sub "${EnvironmentName}-BibidiBackend-DatabaseConnectionString"
