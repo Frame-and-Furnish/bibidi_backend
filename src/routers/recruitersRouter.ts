@@ -37,7 +37,7 @@ router.patch(
 );
 
 // Admin recruiter management
-router.get('/', authenticateToken, hasRole(['administrator']), listRecruiters);
+router.get('/', authenticateToken, hasRole(['recruiter', 'administrator']), listRecruiters);
 router.patch('/:id/status', authenticateToken, hasRole(['administrator']), updateRecruiterStatus);
 
 export default router;
