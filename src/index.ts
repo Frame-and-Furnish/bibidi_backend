@@ -53,6 +53,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve local uploads when using local storage driver
+// Skip local uploads setup in Vercel serverless environment
+/*
 if ((process.env.STORAGE_DRIVER || 'local') !== 's3') {
   const uploadsDir = process.env.LOCAL_UPLOADS_DIR || path.resolve(process.cwd(), 'uploads');
   if (!fs.existsSync(uploadsDir)) {
@@ -60,6 +62,7 @@ if ((process.env.STORAGE_DRIVER || 'local') !== 's3') {
   }
   app.use('/uploads', express.static(uploadsDir));
 }
+*/
 
 // Request logging middleware (simple console logging)
 app.use((req, res, next) => {
