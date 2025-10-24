@@ -38,6 +38,7 @@ const corsOptions = {
     'ionic://localhost', // Ionic apps
     'http://localhost:3000', // React development
     'http://192.168.*:*', // Local network development
+    'https://bibidi-offlineteam.vercel.app',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
