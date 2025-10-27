@@ -191,7 +191,7 @@ export const createOfflineProvider = async (req: Request, res: Response): Promis
     const { firstName, lastName } = splitFullName(fullName);
 
     if (!user) {
-      temporaryPassword = generateRandomString(12);
+      temporaryPassword = process.env.PROVIDER_TEMPPASSWORD ?? generateRandomString(12); //generateRandomString(12);
       const passwordHash = await hashPassword(temporaryPassword);
 
       const insertedUsers = await db
